@@ -27,9 +27,12 @@ from PIL import Image
 
 tqdm = partial(tqdm.tqdm, dynamic_ncols=True)
 
-
+import os
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 FLAGS = flags.FLAGS
-config_flags.DEFINE_config_file("config", "config/base.py", "Training configuration.")
+BASE_DIR = "/root/autodl-tmp/ddpo-pytorch/cache_sd15/models--CompVis--stable-diffusion-v1-4/snapshots/133a221b8aa7292a167afc5127cb63fb5005638b"
+
+config_flags.DEFINE_config_file("config", "config/base_is.py", "Training configuration.")
 
 logger = get_logger(__name__)
 
@@ -37,6 +40,9 @@ logger = get_logger(__name__)
 def main(_):
     # basic Accelerate and logging setup
     config = FLAGS.config
+
+    stats_path = os.path.join(config.logdir, f"{config.run_name}_reward_history.npy")
+    reward_history = []
 
     unique_id = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
     if not config.run_name:
@@ -89,8 +95,12 @@ def main(_):
     set_seed(config.seed, device_specific=True)
 
     # load scheduler, tokenizer and models.
+    # pipeline = StableDiffusionPipeline.from_pretrained(
+    #     config.pretrained.model, revision=config.pretrained.revision
+    # )
     pipeline = StableDiffusionPipeline.from_pretrained(
-        config.pretrained.model, revision=config.pretrained.revision
+        BASE_DIR,
+        local_files_only=True,     # <--- prevent downloads
     )
     # freeze parameters of models to save more memory
     pipeline.vae.requires_grad_(False)
@@ -158,6 +168,23 @@ def main(_):
         unet = _Wrapper(pipeline.unet.attn_processors)
     else:
         unet = pipeline.unet
+
+    ###ref pipeline
+    if config.kl_ref:
+        pipeline_ref = StableDiffusionPipeline.from_pretrained(
+            BASE_DIR,
+            local_files_only=True,     # <--- prevent downloads
+        )
+        pipeline_ref.vae.requires_grad_(False)
+        pipeline_ref.text_encoder.requires_grad_(False)
+        pipeline_ref.unet.requires_grad_(False)
+        pipeline_ref.safety_checker = None
+        pipeline_ref.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
+        pipeline_ref.vae.to(accelerator.device, dtype=inference_dtype)
+        pipeline_ref.text_encoder.to(accelerator.device, dtype=inference_dtype)
+        pipeline_ref.unet.to(accelerator.device, dtype=inference_dtype)
+
+        pipeline_ref.unet.eval()
 
     # set up diffusers-friendly checkpoint saving with Accelerate
 
@@ -297,12 +324,12 @@ def main(_):
     if config.resume_from:
         logger.info(f"Resuming from {config.resume_from}")
         accelerator.load_state(config.resume_from)
-        first_epoch = int(config.resume_from.split("_")[-1]) + 1
+        first_epoch = int(config.resume_from.split("_")[-1]) + 1 + 95
     else:
-        first_epoch = 0
+        first_epoch = 1
 
     global_step = 0
-    for epoch in range(first_epoch, config.num_epochs):
+    for epoch in range(first_epoch, config.num_epochs + 1):
         #################### SAMPLING ####################
         pipeline.unet.eval()
         samples = []
@@ -342,11 +369,25 @@ def main(_):
                     eta=config.sample.eta,
                     output_type="pt",
                 )
+                if config.kl_ref:
+                    images_ref, _, _, log_probs_ref = pipeline_with_logprob(
+                        pipeline_ref,
+                        prompt_embeds=prompt_embeds,
+                        negative_prompt_embeds=sample_neg_prompt_embeds,
+                        num_inference_steps=config.sample.num_steps,
+                        guidance_scale=config.sample.guidance_scale,
+                        eta=config.sample.eta,
+                        output_type="pt",
+                    )
 
             latents = torch.stack(
                 latents, dim=1
             )  # (batch_size, num_steps + 1, 4, 64, 64)
             log_probs = torch.stack(log_probs, dim=1)  # (batch_size, num_steps, 1)
+            if config.kl_ref:
+                log_probs_ref = torch.stack(log_probs_ref, dim=1)  # (batch_size, num_steps, 1)
+            else:
+                log_probs_ref = log_probs
             timesteps = pipeline.scheduler.timesteps.repeat(
                 config.sample.batch_size, 1
             )  # (batch_size, num_steps)
@@ -368,6 +409,7 @@ def main(_):
                         :, 1:
                     ],  # each entry is the latent after timestep t
                     "log_probs": log_probs,
+                    "log_probs_ref": log_probs_ref,
                     "rewards": rewards,
                 }
             )
@@ -408,9 +450,33 @@ def main(_):
                 },
                 step=global_step,
             )
+            if config.kl_ref:
+                for i, image in enumerate(images_ref):
+                    pil = Image.fromarray(
+                        (image.cpu().numpy().transpose(1, 2, 0) * 255).astype(np.uint8)
+                    )
+                    pil = pil.resize((256, 256))
+                    pil.save(os.path.join(tmpdir, f"{i}.jpg"))
+                accelerator.log(
+                    {
+                        "images_ref": [
+                            wandb.Image(
+                                os.path.join(tmpdir, f"{i}.jpg"),
+                                caption=f"{prompt:.25}",
+                            )
+                            for i, (prompt, reward) in enumerate(
+                                zip(prompts, rewards)
+                            )  # only log rewards from process 0
+                        ],
+                    },
+                    step=global_step,
+                )
 
         # gather rewards across processes
         rewards = accelerator.gather(samples["rewards"]).cpu().numpy()
+
+        reward_mean = float(rewards.mean())
+        reward_std = float(rewards.std())
 
         # log rewards and images
         accelerator.log(
@@ -422,6 +488,12 @@ def main(_):
             },
             step=global_step,
         )
+
+        if accelerator.is_main_process:
+            reward_history.append(reward_mean)
+            # save after every epoch so we don't lose info if training stops
+            np.save(stats_path, np.array(reward_history))
+            
 
         # per-prompt mean/std tracking
         if config.per_prompt_stat_tracking:
@@ -464,7 +536,7 @@ def main(_):
                     for _ in range(total_batch_size)
                 ]
             )
-            for key in ["timesteps", "latents", "next_latents", "log_probs"]:
+            for key in ["timesteps", "latents", "next_latents", "log_probs", "log_probs_ref"]:
                 samples[key] = samples[key][
                     torch.arange(total_batch_size, device=accelerator.device)[:, None],
                     perms,
@@ -541,30 +613,39 @@ def main(_):
                             -config.train.adv_clip_max,
                             config.train.adv_clip_max,
                         )
-                        ratio = torch.exp(log_prob - sample["log_probs"][:, j])
-                        unclipped_loss = -advantages * ratio
-                        clipped_loss = -advantages * torch.clamp(
-                            ratio,
-                            1.0 - config.train.clip_range,
-                            1.0 + config.train.clip_range,
-                        )
-                        loss = torch.mean(torch.maximum(unclipped_loss, clipped_loss))
+                        if config._is:
+                            ratio = torch.exp(log_prob - sample["log_probs"][:, j])
+                            unclipped_loss = -advantages * ratio
+                            clipped_loss = -advantages * torch.clamp(
+                                ratio,
+                                1.0 - config.train.clip_range,
+                                1.0 + config.train.clip_range,
+                            )
+                            loss = torch.mean(torch.maximum(unclipped_loss, clipped_loss))
+                        else:
+                            loss =  torch.mean(-(sample["advantages"] * log_prob))
 
                         # debugging values
                         # John Schulman says that (ratio - 1) - log(ratio) is a better
                         # estimator, but most existing code uses this so...
                         # http://joschu.net/blog/kl-approx.html
+                        approx_kl = 0.5 * torch.mean((log_prob - sample["log_probs"][:, j]) ** 2)
+                        if config.kl_ref:
+                            approx_kl = 0.5 * torch.mean((log_prob - sample["log_probs_ref"][:, j]) ** 2)
                         info["approx_kl"].append(
-                            0.5
-                            * torch.mean((log_prob - sample["log_probs"][:, j]) ** 2)
+                            approx_kl
                         )
-                        info["clipfrac"].append(
-                            torch.mean(
-                                (
-                                    torch.abs(ratio - 1.0) > config.train.clip_range
-                                ).float()
+                        if config._is:
+                            info["clipfrac"].append(
+                                torch.mean(
+                                    (
+                                        torch.abs(ratio - 1.0) > config.train.clip_range
+                                    ).float()
+                                )
                             )
-                        )
+
+                        kl_coef = config.kl_coef
+                        loss += kl_coef * approx_kl
                         info["loss"].append(loss)
 
                         # backward pass
@@ -592,7 +673,7 @@ def main(_):
             # make sure we did an optimization step at the end of the inner epoch
             assert accelerator.sync_gradients
 
-        if epoch != 0 and epoch % config.save_freq == 0 and accelerator.is_main_process:
+        if epoch != first_epoch and (epoch) % config.save_freq == 0 and accelerator.is_main_process:
             accelerator.save_state()
 
 

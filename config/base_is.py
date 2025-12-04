@@ -6,16 +6,16 @@ def get_config():
 
     ###### General ######
     # run name for wandb logging and checkpoint saving -- if not provided, will be auto-generated based on the datetime.
-    config.run_name = "run_5_wo_is"
+    config.run_name = "run_3_kl_ref"
     # random seed for reproducibility.
-    config.seed = 44
+    config.seed = 42
     # top-level logging directory for checkpoint saving.
     config.logdir = "logs"
     # number of epochs to train for. each epoch is one round of sampling from the model followed by training on those
     # samples.
     config.num_epochs = 200
     # number of epochs between saving model checkpoints.
-    config.save_freq = 40
+    config.save_freq = 20
     # number of checkpoints to keep before overwriting old ones.
     config.num_checkpoint_limit = 10
     # mixed precision training. options are "fp16", "bf16", and "no". half-precision speeds up training significantly.
@@ -40,7 +40,11 @@ def get_config():
     pretrained.revision = "main"
 
     ###### Important Sampling ######
-    config._is = False
+    config._is = True
+
+    ###### KL ######
+    config.kl_coef = 1
+    config.kl_ref = True
 
     ###### Sampling ######
     config.sample = sample = ml_collections.ConfigDict()
@@ -75,7 +79,7 @@ def get_config():
     train.adam_epsilon = 1e-8
     # number of gradient accumulation steps. the effective batch size is `batch_size * num_gpus *
     # gradient_accumulation_steps`.
-    train.gradient_accumulation_steps = 4
+    train.gradient_accumulation_steps = 2
     # maximum gradient norm for gradient clipping.
     train.max_grad_norm = 1.0
     # number of inner epochs per outer epoch. each inner epoch is one iteration through the data collected during one

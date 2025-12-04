@@ -1,4 +1,18 @@
-# ddpo-pytorch
+# Fall-2025-Reinforcement-Learning-Final-Project
+
+work based on the orginal repo of **ddpo-pytorch**
+
+added DDPO IS, DDPO ISKL, and plt/visualize funtions
+
+env setup should be the same
+
+default config is now at config/base_is.py, with added **config._is**, **config.kl_coef**, **config.kl_ref**, to turn off KL, set **config.kl_coef=0**
+
+to loop for expeirments, use loop_expeirments.py, where run name and seed will be updated
+
+The SDv1.4 are loaded from local, first call *from_pretrained* with a *cache_dir* to store the model locally. For rest or runs, call with *local_files_only*. 
+
+below are original readme for ddpo pytorch
 
 This is an implementation of [Denoising Diffusion Policy Optimization (DDPO)](https://rl-diffusion.github.io/) in PyTorch with support for [low-rank adaptation (LoRA)](https://huggingface.co/docs/diffusers/training/lora). Unlike our original research code (which you can find [here](https://github.com/jannerm/ddpo)), this implementation runs on GPUs, and if LoRA is enabled, requires less than 10GB of GPU memory to finetune Stable Diffusion!
 

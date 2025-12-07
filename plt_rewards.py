@@ -1,4 +1,4 @@
-import glob
+import glob, re
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -17,22 +17,36 @@ def load_runs(pattern):
     return episodes, mean, low, high
 
 
-plt.figure(figsize=(4, 3))
+plt.figure(figsize=(10, 8))
 ax = plt.gca()
 
 # Example: one algorithm (blue)
-eps, mean, low, high = load_runs("logs/run_*_reward_history.npy")
-ax.plot(eps, mean, color="C0")
-ax.fill_between(eps, low, high, color="C0", alpha=0.3)
+EPISODE_SIZE = 16
 
-# # Example: another algorithm (red)
-# eps2, mean2, low2, high2 = load_runs("runs/alien_algo2_*.npy")
-# ax.plot(eps2, mean2, color="C1")
-# ax.fill_between(eps2, low2, high2, color="C1", alpha=0.3)
+# --- Algorithm 1: IS ---
+eps, mean, low, high = load_runs("logs/run_[0-9]*_aes_is_reward_history.npy")
+samples = eps * EPISODE_SIZE
+ax.plot(samples, mean, color="C0", label="IS")
+ax.fill_between(samples, low, high, color="C0", alpha=0.3)
 
-ax.set_xlabel("Episode")
-ax.set_ylabel("rewards of compressibility")
-ax.set_title("DDPO IS")
+# --- Algorithm 2: SF / no IS ---
+eps2, mean2, low2, high2 = load_runs("logs/run_[0-9]*_aes_sf_reward_history.npy")
+samples2 = eps2 * EPISODE_SIZE
+ax.plot(samples2, mean2, color="C1", label="SF (no IS)")
+ax.fill_between(samples2, low2, high2, color="C1", alpha=0.3)
+
+# --- Algorithm 3: IS + KL reference ---
+eps3, mean3, low3, high3 = load_runs("logs/run_[0-9]*_aes_iskl_reward_history.npy")
+samples3 = eps3 * EPISODE_SIZE
+ax.plot(samples3, mean3, color="C2", label="ISKL Ref")
+ax.fill_between(samples3, low3, high3, color="C2", alpha=0.3)
+
+# Labels and formatting
+ax.set_xlabel("Samples")
+ax.set_ylabel("Rewards (aesthetics)")
+ax.set_title("DDPO: IS vs SF vs ISKL")
+ax.legend()  # <-- add legend
+
 plt.tight_layout()
-plt.savefig("plt/reward_plot_ddpo_is_compress.png", bbox_inches="tight")
+plt.savefig("plt/reward_plot_ddpo_aesthetics.png", bbox_inches="tight")
 

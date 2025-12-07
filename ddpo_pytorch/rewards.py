@@ -29,10 +29,15 @@ def jpeg_compressibility():
     return _fn
 
 
-def aesthetic_score():
+def aesthetic_score(device=None):
+    import torch
     from ddpo_pytorch.aesthetic_scorer import AestheticScorer
 
-    scorer = AestheticScorer(dtype=torch.float32).cuda()
+    # default device: original behavior = CUDA:0
+    if device is None:
+        device = "cuda"
+
+    scorer = AestheticScorer(dtype=torch.float32).to(device)
 
     def _fn(images, prompts, metadata):
         if isinstance(images, torch.Tensor):
@@ -40,10 +45,13 @@ def aesthetic_score():
         else:
             images = images.transpose(0, 3, 1, 2)  # NHWC -> NCHW
             images = torch.tensor(images, dtype=torch.uint8)
+
+        # scorer internally moves tensors to its own device
         scores = scorer(images)
         return scores, {}
 
     return _fn
+
 
 
 def llava_strict_satisfaction():

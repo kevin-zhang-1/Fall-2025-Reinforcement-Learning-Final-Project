@@ -254,7 +254,13 @@ def main(_):
 
     # prepare prompt and reward fn
     prompt_fn = getattr(ddpo_pytorch.prompts, config.prompt_fn)
-    reward_fn = getattr(ddpo_pytorch.rewards, config.reward_fn)()
+    if torch.cuda.is_available() and torch.cuda.device_count() > config.reward_device:
+        reward_device = torch.device(f"cuda:{config.reward_device}")
+    else:
+        reward_device = accelerator.device  # fallback if only 1–2 GPUs
+
+    reward_fn = getattr(ddpo_pytorch.rewards, config.reward_fn)(device=reward_device)
+    # reward_fn = getattr(ddpo_pytorch.rewards, config.reward_fn)()
 
     # generate negative prompt embeddings
     neg_prompt_embed = pipeline.text_encoder(
@@ -629,7 +635,10 @@ def main(_):
                         # John Schulman says that (ratio - 1) - log(ratio) is a better
                         # estimator, but most existing code uses this so...
                         # http://joschu.net/blog/kl-approx.html
+                            
+                        # PPO sytle kl
                         approx_kl = 0.5 * torch.mean((log_prob - sample["log_probs"][:, j]) ** 2)
+                        # compute kl with ref model
                         if config.kl_ref:
                             approx_kl = 0.5 * torch.mean((log_prob - sample["log_probs_ref"][:, j]) ** 2)
                         info["approx_kl"].append(
@@ -643,7 +652,7 @@ def main(_):
                                     ).float()
                                 )
                             )
-
+                        #if no kl, kl coef = 0
                         kl_coef = config.kl_coef
                         loss += kl_coef * approx_kl
                         info["loss"].append(loss)

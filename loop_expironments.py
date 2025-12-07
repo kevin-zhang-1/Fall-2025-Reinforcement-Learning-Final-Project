@@ -32,13 +32,13 @@ def main():
     start_seed = 40
 
     for i in range(5):
-        run_name = f"run_{start_run_idx + i}_kl_ref"
+        run_name = f"run_{start_run_idx + i}_aes_iskl"
         seed = start_seed + i
 
         update_config(run_name, seed)
 
         print(f"[INFO] Launching training: {run_name}")
-        subprocess.run(["accelerate", "launch", "scripts/train.py"])
+        subprocess.run(["accelerate", "launch", "--num_processes","2", "scripts/train.py","--config" ,"config/dgx.py:aesthetic"])
 
 if __name__ == "__main__":
     main()

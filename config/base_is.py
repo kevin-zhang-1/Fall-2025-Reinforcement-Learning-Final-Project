@@ -6,16 +6,16 @@ def get_config():
 
     ###### General ######
     # run name for wandb logging and checkpoint saving -- if not provided, will be auto-generated based on the datetime.
-    config.run_name = "run_3_kl_ref"
+    config.run_name = "run_5_aes_iskl"
     # random seed for reproducibility.
-    config.seed = 42
+    config.seed = 44
     # top-level logging directory for checkpoint saving.
     config.logdir = "logs"
     # number of epochs to train for. each epoch is one round of sampling from the model followed by training on those
     # samples.
     config.num_epochs = 200
     # number of epochs between saving model checkpoints.
-    config.save_freq = 20
+    config.save_freq = 40
     # number of checkpoints to keep before overwriting old ones.
     config.num_checkpoint_limit = 10
     # mixed precision training. options are "fp16", "bf16", and "no". half-precision speeds up training significantly.
@@ -38,6 +38,8 @@ def get_config():
     pretrained.model = "CompVis/stable-diffusion-v1-4"
     # revision of the model to load.
     pretrained.revision = "main"
+
+    config.reward_device = 2 
 
     ###### Important Sampling ######
     config._is = True

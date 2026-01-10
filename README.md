@@ -16,6 +16,7 @@ The SDv1.4 are loaded from local, first call *from_pretrained* with a *cache_dir
 
 - 📄 **Project Report**: [Fall-2025 RL Project Report: A Replication of DDPO](<Project Report/Fall_2025_RL_DDPO_Project_Report.pdf>)
 
+## Codebase
 below are original readme for ddpo pytorch
 
 This is an implementation of [Denoising Diffusion Policy Optimization (DDPO)](https://rl-diffusion.github.io/) in PyTorch with support for [low-rank adaptation (LoRA)](https://huggingface.co/docs/diffusers/training/lora). Unlike our original research code (which you can find [here](https://github.com/jannerm/ddpo)), this implementation runs on GPUs, and if LoRA is enabled, requires less than 10GB of GPU memory to finetune Stable Diffusion!

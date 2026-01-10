@@ -12,7 +12,9 @@ to loop for expeirments, use loop_expeirments.py, where run name and seed will b
 
 The SDv1.4 are loaded from local, first call *from_pretrained* with a *cache_dir* to store the model locally. For rest or runs, call with *local_files_only*. 
 
-Here is out project report: [Fall-2025 RL Project Report: A Replication of DDPO](Project Report/Fall_2025_RL_DDPO_Project_Report.pdf)
+## Our Project Report
+
+- 📄 **Project Report**: [Fall-2025 RL Project Report: A Replication of DDPO](<Project Report/Fall_2025_RL_DDPO_Project_Report.pdf>)
 
 below are original readme for ddpo pytorch
 

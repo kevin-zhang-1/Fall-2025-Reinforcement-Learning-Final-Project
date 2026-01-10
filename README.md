@@ -1,6 +1,6 @@
 # Fall-2025-Reinforcement-Learning-Final-Project
 
-work based on the orginal repo of **ddpo-pytorch**
+Replication work based on the orginal repo of **ddpo-pytorch**
 
 added DDPO IS, DDPO ISKL, and plt/visualize funtions
 
@@ -11,6 +11,8 @@ default config is now at config/base_is.py, with added **config._is**, **config.
 to loop for expeirments, use loop_expeirments.py, where run name and seed will be updated
 
 The SDv1.4 are loaded from local, first call *from_pretrained* with a *cache_dir* to store the model locally. For rest or runs, call with *local_files_only*. 
+
+Our Project report:
 
 below are original readme for ddpo pytorch
 

@@ -14,7 +14,7 @@ The SDv1.4 are loaded from local, first call *from_pretrained* with a *cache_dir
 
 ## Our Project Report
 
-- 📄 **Project Report**: [Fall-2025 RL Project Report: A Replication of DDPO](<Project Report/Fall_2025_RL_DDPO_Project_Report.pdf>)
+- 📄 **Project Report**: [Fall-2025 RL Project Report: A Replication of DDPO](Project-Report/Fall_2025_RL_DDPO_Project_Report.pdf)
 
 ## Codebase
 below are original readme for ddpo pytorch
